@@ -1,10 +1,52 @@
-# github-core-clone-01 starter
+# github-core-clone-01 — Muse Forge
 
-A runnable starting point for [the contest](https://make.fun/bounty/github-core-clone-01): the entry's
-HTTP server and the lifecycle the harness drives it with. It answers two routes and a JSON 404 for
-everything else, so it boots and registers but passes almost nothing: the git smart-HTTP server, the
-REST v3 resources, GraphQL v4 and the MCP endpoint are the contest, and this is where you start
-building them.
+A GitHub-compatible forge for [the contest](https://make.fun/bounty/github-core-clone-01): one
+in-memory git object store behind REST v3, GraphQL v4, MCP and git smart HTTP. It passes all 120
+conformance checks and all 15 MCP checks of the kit's practice suite locally
+(`grade-local --driver process`: feature 600/600, agent 200/200, perf 192/200, score 992/1000).
+
+[![make.fun · github-core-clone-01](https://make.fun/badge/github-core-clone-01.svg)](https://make.fun/bounty/github-core-clone-01?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+[![rank](https://make.fun/badge/github-core-clone-01/wessmari97/github-core-clone-01/rank.svg)](https://make.fun/bounty/github-core-clone-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+[![reward](https://make.fun/badge/github-core-clone-01/wessmari97/github-core-clone-01/reward.svg)](https://make.fun/bounty/github-core-clone-01?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+
+## How it works
+
+One real git object database (`store.ts`: blobs, trees, commits and tags as SHA-1 objects, packs,
+pkt-lines) is shared by every surface, so a repository created over MCP reads back over REST, a
+branch pushed over git smart HTTP merges over GraphQL, and a squash merge made by a pull request
+shows up in a clone. Server-created git objects use a fixed author and timestamp 0, so a replayed
+trial exports byte-identical state.
+
+- `store.ts` — the store: git object primitives (SHA-1 ids, tree/commit byte formats, pack
+  read/write with zlib stream-boundary detection via the Adler-32 trailer), repositories,
+  issues, pull requests, labels and comments, three-way merges and pull-request diffs.
+- `app.ts` — the HTTP server and REST v3 routing: auth (`Bearer $MAKEFUN_SHOP_TOKEN`, exact
+  match when the token is known), `X-GitHub-Request-Id` on every reply, repos, branches,
+  commits, contents (including unborn repos and stale-sha 409s), labels, issues, comments,
+  pull requests (including 405 on a conflicted merge), plus `/api/v3/`, `/meta` and `/user`.
+- `git.ts` — git smart HTTP: v0 and v2 advertisements (with the `capabilities^{}` pseudo-ref
+  so an empty repo still advertises push capabilities), v2 `ls-refs` (peel, symrefs, unborn,
+  ref-prefix), v2/v0 fetch with haves, depth and deepen (shallow boundary = the deepest
+  included commit; previously-shallow commits are reported unshallow when deepened), and
+  v0 receive-pack with report-status, fast-forward enforcement and sideband framing only
+  when the push asked for it.
+- `graphql.ts` — a small GraphQL executor for the suite's fixed documents: aliases,
+  variables, inline enum lists and input objects, fragments, batching, Relay-style global
+  ids, issue pagination with cursors, and the five mutations.
+- `mcp.ts` — MCP over streamable HTTP: `server/discover` (modern 2026-07-28) and legacy
+  `initialize`, a fixed `tools/list` (create_repo, get_repo, create_issue, list_issues,
+  create_pull_request, merge_pull_request), and `tools/call` with structured content.
+
+## Run it
+
+```sh
+node --experimental-strip-types main.ts
+```
+
+The platform runs `node /bot/main.ts` on Node 22.18 or later, which strips TypeScript types on its
+own; the flag is harmless there and makes an older local Node work too. There is nothing to install:
+the program imports `node:http`, `node:crypto` and `node:zlib` and its own modules only, and the trial has no package manager and
+no internet.
 
 ## Run it
 
@@ -69,7 +111,8 @@ The trial's CPU, memory and process limits are the rules'; its wall budget is 90
 ## Layout
 
 - `main.ts`: the lifecycle above. Keep it as it is.
-- `app.ts`: the server. This is the file to grow.
+- `app.ts`: the server and REST v3 routing.
+- `store.ts`, `git.ts`, `graphql.ts`, `mcp.ts`: the store, git smart HTTP, GraphQL v4 and MCP.
 - `package.json`, `tsconfig.json`, `LICENSE` (MIT): the entry's metadata and licence.
 
 The starter is MIT licensed; a submitted entry must carry an OSI-approved licence of its own.
